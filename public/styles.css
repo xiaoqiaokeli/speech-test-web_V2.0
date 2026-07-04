@@ -58,7 +58,7 @@ h1 { margin-bottom: 0; font-size: 30px; line-height: 1.16; letter-spacing: 0; }
 .score-box.bad span { color: var(--bad); }
 .score-box.rate span { color: var(--primary-dark); }
 .wechat-follow { display: grid; justify-items: center; gap: 14px; padding: 18px; border: 1px solid var(--border); border-radius: 8px; background: #fff; text-align: center; box-shadow: 0 10px 24px rgba(15, 69, 64, 0.08); }
-.wechat-qr-frame { width: 128px; height: 128px; padding: 8px; border: 1px solid #e1eeeb; border-radius: 8px; background: #fff; display: grid; place-items: center; }
+.wechat-qr-frame { width: min(48vw, 184px); height: min(48vw, 184px); padding: 10px; border: 1px solid #e1eeeb; border-radius: 8px; background: #fff; display: grid; place-items: center; }
 .wechat-qr-frame img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .qr-placeholder { display: none; width: 100%; height: 100%; place-items: center; text-align: center; color: var(--muted); background: #f6fbfa; border: 1px dashed #b8cbc7; border-radius: 6px; font-size: 17px; line-height: 1.35; font-weight: 800; }
 .wechat-follow.qr-missing .wechat-qr-frame img { display: none; }
@@ -96,7 +96,7 @@ h1 { margin-bottom: 0; font-size: 30px; line-height: 1.16; letter-spacing: 0; }
   .answer-card strong { font-size: 30px; }
   .score-box span { font-size: 28px; }
   .wechat-follow { gap: 12px; padding: 14px; }
-  .wechat-qr-frame { width: 108px; height: 108px; }
+  .wechat-qr-frame { width: min(54vw, 160px); height: min(54vw, 160px); }
   .wechat-copy h2 { font-size: 20px; }
   .wechat-copy p { font-size: 16px; }
   .qr-placeholder { font-size: 15px; }
