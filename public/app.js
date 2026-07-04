@@ -6,7 +6,11 @@
   const RECORD_MIN_MS = 900;
   const RECORD_SILENCE_MS = 1000;
   const RECORD_START_GRACE_MS = 2600;
-  const RECORD_RMS_THRESHOLD = 0.010;
+  const RECORD_RMS_THRESHOLD = 0.006;
+  const RECORD_SOFT_RMS_THRESHOLD = 0.004;
+  const RECORD_NOISE_MULTIPLIER = 1.8;
+  const RECORD_SILENCE_MULTIPLIER = 1.25;
+  const RECORD_SOFT_SPEECH_MS = 180;
   const NEXT_DELAY_MS = 2000;
   const TARGET_SAMPLE_RATE = 16000;
   const XFYUN_FRAME_BYTES = 1280;
@@ -213,7 +217,8 @@
     const startedAt = performance.now();
     let speechStarted = false;
     let lastVoiceAt = 0;
-    let noiseFloor = 0.006;
+    let noiseFloor = 0.004;
+    let softSpeechMs = 0;
     let cleaned = false;
     let maxTimer = null;
     let processor = null;
@@ -247,13 +252,27 @@
       const now = performance.now();
       const elapsed = now - startedAt;
       const rms = calculateRms(input);
-      const speechThreshold = Math.max(RECORD_RMS_THRESHOLD, noiseFloor * 3);
+      const frameMs = ((input.length || 0) / (sampleRate || audioContext.sampleRate)) * 1000;
+      const speechThreshold = Math.max(RECORD_RMS_THRESHOLD, noiseFloor * RECORD_NOISE_MULTIPLIER);
+      const silenceThreshold = Math.max(RECORD_SOFT_RMS_THRESHOLD, noiseFloor * RECORD_SILENCE_MULTIPLIER);
+      const isSpeechFrame = rms > speechThreshold;
+      const isSoftVoiceFrame = rms > silenceThreshold;
 
-      if (rms > speechThreshold) {
+      if (isSpeechFrame || isSoftVoiceFrame) {
+        softSpeechMs += frameMs;
+      } else {
+        softSpeechMs = Math.max(0, softSpeechMs - frameMs * 2);
+      }
+
+      if (!speechStarted && (isSpeechFrame || softSpeechMs >= RECORD_SOFT_SPEECH_MS)) {
         speechStarted = true;
         lastVoiceAt = now;
-      } else if (!speechStarted && elapsed < RECORD_START_GRACE_MS) {
-        noiseFloor = (noiseFloor * 0.95) + (rms * 0.05);
+      }
+
+      if (speechStarted && isSoftVoiceFrame) {
+        lastVoiceAt = now;
+      } else if (!speechStarted && elapsed < RECORD_START_GRACE_MS && !isSoftVoiceFrame) {
+        noiseFloor = (noiseFloor * 0.97) + (rms * 0.03);
       }
 
       const pcm = downsampleTo16k(input, sampleRate || audioContext.sampleRate);
