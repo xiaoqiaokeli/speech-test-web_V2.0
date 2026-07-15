@@ -101,7 +101,6 @@
   let countdownTimer = null;
   let currentAudio = null;
   let currentNoiseAudio = null;
-  const noiseAudioElements = new Map();
   let noisePlaybackOrder = [];
   let questionNoiseTracks = [];
   let playbackRun = 0;
@@ -178,19 +177,23 @@
   }
 
   function getNoiseAudioElement(track) {
-    let noiseAudio = noiseAudioElements.get(track.src);
-    if (!noiseAudio) {
-      noiseAudio = document.createElement("audio");
-      noiseAudio.preload = "auto";
-      noiseAudio.loop = true;
-      noiseAudio.src = track.src;
-      noiseAudio.setAttribute("playsinline", "");
-      noiseAudio.style.display = "none";
-      document.body.appendChild(noiseAudio);
-      noiseAudioElements.set(track.src, noiseAudio);
+    if (!currentNoiseAudio) {
+      currentNoiseAudio = document.createElement("audio");
+      currentNoiseAudio.preload = "auto";
+      currentNoiseAudio.loop = true;
+      currentNoiseAudio.setAttribute("playsinline", "");
+      currentNoiseAudio.setAttribute("webkit-playsinline", "");
+      currentNoiseAudio.style.display = "none";
+      document.body.appendChild(currentNoiseAudio);
     }
-    currentNoiseAudio = noiseAudio;
-    return noiseAudio;
+
+    // iOS 微信的播放许可与具体媒体元素绑定。始终复用同一个元素，只切换
+    // src，首题在“开始测试”手势中解锁后，后续题目才能继续自动播放。
+    if (currentNoiseAudio.getAttribute("src") !== track.src) {
+      currentNoiseAudio.src = track.src;
+      currentNoiseAudio.load();
+    }
+    return currentNoiseAudio;
   }
 
   function getNoiseTrackForQuestion(index) {
@@ -202,12 +205,11 @@
   }
 
   function resetNoisePlayback() {
-    for (const noiseAudio of noiseAudioElements.values()) {
-      noiseAudio.onerror = null;
-      noiseAudio.pause();
-      try { noiseAudio.currentTime = 0; } catch {}
+    if (currentNoiseAudio) {
+      currentNoiseAudio.onerror = null;
+      currentNoiseAudio.pause();
+      try { currentNoiseAudio.currentTime = 0; } catch {}
     }
-    currentNoiseAudio = null;
   }
 
   function setNoiseStatus(track, visible) {
@@ -219,7 +221,6 @@
     if (currentNoiseAudio) {
       currentNoiseAudio.onerror = null;
       currentNoiseAudio.pause();
-      currentNoiseAudio = null;
     }
     setNoiseStatus(null, false);
   }

@@ -34,7 +34,7 @@
         <div class="noise-status is-hidden" id="noiseStatus" role="status" aria-live="polite">
           <span class="noise-status-label">当前环境音</span>
           <strong id="noiseName"></strong>
-          <span class="noise-levels">背景 50 dB · 人声 60 dB · 信噪比 +10 dB</span>
+          <span class="noise-levels">噪声约 50 dB · 词语音频约 60 dB · 信噪比约 10 dB</span>
           <span class="noise-calibration-note">实际分贝大小会因播放设备和系统音量而变化，仅供参考。准确数值需用声级计校准。</span>
         </div>
 
@@ -84,7 +84,7 @@
       <section class="notice-modal" id="noticeModal" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
         <div class="notice-card">
           <h2 id="noticeTitle">请在安静的环境中测试</h2>
-          <p>播放词语音频时会掺杂日常环境噪声。</p>
+          <p>播放词语音频时会掺杂环境噪声。噪声约50dB，词语音频约60dB，信噪比约10dB。实际分贝大小会因播放设备和系统音量而变化，仅供参考。准确数值需用声级计校准。</p>
           <p>请将嘴巴靠近手机，大声朗读。</p>
           <p>如果没听清，也请读出大概听到的发音，以便测出真实听力情况。</p>
           <button class="primary-button" id="startButton" type="button">开始测试</button>
@@ -93,6 +93,6 @@
     </main>
 
     <script src="./words-data.js?v=20260715-rms-levels"></script>
-    <script src="./app.js?v=20260715-noise-cycle"></script>
+    <script src="./app.js?v=20260715-ios-audio"></script>
   </body>
 </html>
