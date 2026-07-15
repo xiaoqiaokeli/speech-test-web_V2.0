@@ -2,38 +2,10 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-
-const appPath = path.join(__dirname, "..", "public", "app.js");
-const source = fs.readFileSync(appPath, "utf8");
-
-function extractBetween(startMarker, endMarker) {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start);
-  assert.ok(start >= 0 && end > start, "无法从 app.js 提取实际判定代码");
-  return source.slice(start, end);
-}
-
-const judgeSource = extractBetween("  function judgePronunciation", "  function getToneKey");
-const cleanSource = extractBetween("  function cleanChinese", "  function setProgress");
+const { judgePronunciation } = require("../public/pronunciation-judge.js");
 
 function judge(expected, heard) {
-  const context = {
-    Set,
-    Array,
-    String,
-    Boolean,
-    getToneKey: () => "",
-    result: null
-  };
-  vm.runInNewContext(
-    judgeSource + "\n" + cleanSource +
-      "\nresult = judgePronunciation(" + JSON.stringify(expected) + ", " + JSON.stringify(heard) + ");",
-    context
-  );
-  return { ...context.result };
+  return judgePronunciation(expected, heard);
 }
 
 const cases = [
@@ -48,6 +20,16 @@ const cases = [
   ["明确改口", "大家哦不是应该是大学", true, "大学"],
   ["开头语气词后明确改口", "嗯大家不是大学", true, "大学"],
   ["明确改口后的连接词是", "大家哦不是哦是大学", true, "大学"],
+  ["明确改口后的确认词才对", "大家哦不对哦是大学才对", true, "大学"],
+  ["语气词分隔的重复答案", "大家哦不对哦是大学哦大学", true, "大学"],
+  ["多个语气词分隔的重复答案", "大家不对是大学哦啊大学", true, "大学"],
+  ["明确确认才对", "大学才对", true, "大学"],
+  ["带连接词的明确确认", "是大学才对", true, "大学"],
+  ["确认后带吧仍不确定", "大学才对吧", false, "大学才对吧"],
+  ["可能前缀不能借才对生效", "可能是大学才对", false, "可能是大学才对"],
+  ["确认错误词仍判错", "大雪才对", false, "大雪才对"],
+  ["才对后带吧仍不确定", "大家不对是大学才对吧", false, "是大学才对吧"],
+  ["语气词分隔不同答案仍判错", "大家不对是大学哦大雪", false, "是大学哦大雪"],
   ["句首连接词不能单独生效", "是大学", false, "是大学"],
   ["没有明确改口时连接词不能生效", "大家是大学", false, "大家是大学"],
   ["连接词后仍不确定", "大家不是哦是大学吧", false, "是大学吧"],
@@ -62,6 +44,11 @@ const cases = [
 
 test("正确答案本身以是开头时不会误删", () => {
   assert.deepEqual(judge("是非", "大家不是是非"), { correct: true, display: "是非" });
+});
+
+test("正确答案以是开头时才对规则不会误删", () => {
+  assert.deepEqual(judge("是非", "是非才对"), { correct: true, display: "是非" });
+  assert.deepEqual(judge("是非", "是是非才对"), { correct: true, display: "是非" });
 });
 
 for (const [name, heard, correct, display] of cases) {

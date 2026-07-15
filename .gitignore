@@ -3,3 +3,9 @@ Thumbs.db
 .idea/
 serve-local.cjs
 design-concept.png
+
+# Local pronunciation judge page
+public/judge-test.html
+public/judge-test.css
+public/judge-test.js
+tests/judge-test-page.test.cjs
