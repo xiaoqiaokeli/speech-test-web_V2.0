@@ -40,6 +40,7 @@ h1 { margin-bottom: 0; font-size: 30px; line-height: 1.16; letter-spacing: 0; }
 .noise-status-label { color: var(--muted); font-size: 16px; font-weight: 700; }
 .noise-status strong { color: var(--primary-dark); font-size: 24px; line-height: 1.25; }
 .noise-levels { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.noise-calibration-note { color: #71817f; font-size: 12px; line-height: 1.45; }
 .answer-card { width: min(100%, 360px); margin-top: 24px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 8px; background: #fff; text-align: center; box-shadow: 0 10px 24px rgba(15, 69, 64, 0.08); display: grid; gap: 12px; }
 .answer-card span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 18px; font-weight: 800; }
 .answer-card strong { display: block; font-size: 34px; line-height: 1.15; color: var(--text); overflow-wrap: anywhere; }

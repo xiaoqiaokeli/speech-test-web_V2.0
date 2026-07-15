@@ -26,13 +26,13 @@
   const SPEECH_TARGET_DBFS = -27;
   const NOISE_TARGET_DBFS = SPEECH_TARGET_DBFS - SNR_DB;
   const NOISE_TRACKS = [
-    { name: "交通噪声", src: "./audio/noise/噪音-交通噪声.mp3", rmsDbfs: -12.5 },
-    { name: "言语噪声", src: "./audio/noise/噪音-言语噪音.mp3", rmsDbfs: -8.4 },
-    { name: "餐厅背景音", src: "./audio/noise/噪音-餐厅背景音.mp3", rmsDbfs: -10.0 },
     { name: "雷雨声", src: "./audio/noise/打雷下雨.mp3", rmsDbfs: -13.1 },
-    { name: "洗衣机声", src: "./audio/noise/洗衣机声.mp3", rmsDbfs: -18.0 },
-    { name: "碗碟碰撞声", src: "./audio/noise/碗碰撞声.mp3", rmsDbfs: -20.1 },
-    { name: "脚步声", src: "./audio/noise/脚步声音.mp3", rmsDbfs: -28.7 }
+    { name: "揉纸张声", src: "./audio/noise/揉纸张声.mp3", rmsDbfs: -23.8 },
+    { name: "森林鸟语", src: "./audio/noise/森林鸟语.mp3", rmsDbfs: -23.9 },
+    { name: "言语噪声", src: "./audio/noise/言语噪音.mp3", rmsDbfs: -8.4 },
+    { name: "轻音乐 1", src: "./audio/noise/轻音乐1.mp3", rmsDbfs: -15.1 },
+    { name: "轻音乐 2", src: "./audio/noise/轻音乐2.mp3", rmsDbfs: -15.0 },
+    { name: "餐厅背景音", src: "./audio/noise/餐厅背景音.mp3", rmsDbfs: -10.0 }
   ];
 
   function volumeForTarget(sourceDbfs, targetDbfs, fallback) {
@@ -101,6 +101,8 @@
   let countdownTimer = null;
   let currentAudio = null;
   let currentNoiseAudio = null;
+  const noiseAudioElements = new Map();
+  let noisePlaybackOrder = [];
   let questionNoiseTracks = [];
   let playbackRun = 0;
   let activeCleanup = null;
@@ -123,12 +125,14 @@
   function startTest() {
     stopActiveRecording();
     stopAudio();
+    resetNoisePlayback();
     clearTimeout(countdownTimer);
     answers = [];
     currentIndex = 0;
     finalizing = false;
     recordingInProgress = false;
     questionNoiseTracks = [];
+    noisePlaybackOrder = shuffle(NOISE_TRACKS);
     testItems = selectTestItems(words, TEST_SIZE);
     localStorage.setItem(LAST_TEST_WORDS_KEY, JSON.stringify(testItems.map((item) => item.word)));
     elements.testPanel.classList.remove("is-hidden");
@@ -173,27 +177,37 @@
     return currentAudio;
   }
 
-  function getNoiseAudioElement() {
-    if (!currentNoiseAudio) {
-      currentNoiseAudio = document.createElement("audio");
-      currentNoiseAudio.preload = "auto";
-      currentNoiseAudio.loop = true;
-      currentNoiseAudio.setAttribute("playsinline", "");
-      currentNoiseAudio.style.display = "none";
-      document.body.appendChild(currentNoiseAudio);
+  function getNoiseAudioElement(track) {
+    let noiseAudio = noiseAudioElements.get(track.src);
+    if (!noiseAudio) {
+      noiseAudio = document.createElement("audio");
+      noiseAudio.preload = "auto";
+      noiseAudio.loop = true;
+      noiseAudio.src = track.src;
+      noiseAudio.setAttribute("playsinline", "");
+      noiseAudio.style.display = "none";
+      document.body.appendChild(noiseAudio);
+      noiseAudioElements.set(track.src, noiseAudio);
     }
-    return currentNoiseAudio;
+    currentNoiseAudio = noiseAudio;
+    return noiseAudio;
   }
 
   function getNoiseTrackForQuestion(index) {
     if (questionNoiseTracks[index]) return questionNoiseTracks[index];
-    const previous = questionNoiseTracks[index - 1];
-    const choices = previous && NOISE_TRACKS.length > 1
-      ? NOISE_TRACKS.filter((track) => track.src !== previous.src)
-      : NOISE_TRACKS;
-    const track = choices[Math.floor(Math.random() * choices.length)];
+    const order = noisePlaybackOrder.length ? noisePlaybackOrder : NOISE_TRACKS;
+    const track = order[index % order.length];
     questionNoiseTracks[index] = track;
     return track;
+  }
+
+  function resetNoisePlayback() {
+    for (const noiseAudio of noiseAudioElements.values()) {
+      noiseAudio.onerror = null;
+      noiseAudio.pause();
+      try { noiseAudio.currentTime = 0; } catch {}
+    }
+    currentNoiseAudio = null;
   }
 
   function setNoiseStatus(track, visible) {
@@ -205,7 +219,7 @@
     if (currentNoiseAudio) {
       currentNoiseAudio.onerror = null;
       currentNoiseAudio.pause();
-      currentNoiseAudio.currentTime = 0;
+      currentNoiseAudio = null;
     }
     setNoiseStatus(null, false);
   }
@@ -230,8 +244,8 @@
     hideAnswer();
     hideActionButtons();
     const audio = getAudioElement();
-    const noiseAudio = getNoiseAudioElement();
     const noiseTrack = getNoiseTrackForQuestion(currentIndex);
+    const noiseAudio = getNoiseAudioElement(noiseTrack);
     const run = playbackRun;
     setNoiseStatus(noiseTrack, false);
     audio.volume = volumeForTarget(item.rmsDbfs, SPEECH_TARGET_DBFS, 1);
@@ -245,9 +259,7 @@
     audio.onerror = () => handlePlaybackFailure(run, audio.error, "词语音频");
     noiseAudio.onerror = () => handlePlaybackFailure(run, noiseAudio.error, "环境音");
     audio.src = item.audio;
-    noiseAudio.src = noiseTrack.src;
     audio.load();
-    noiseAudio.load();
     const speechPlay = audio.play();
     const noisePlay = noiseAudio.play();
     Promise.all([speechPlay, noisePlay])
