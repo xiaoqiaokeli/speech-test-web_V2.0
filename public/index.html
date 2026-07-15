@@ -28,14 +28,14 @@
           <span id="statusIcon">▶</span>
         </div>
 
-        <p class="phase-text" id="phaseText">点击开始后自动播放词语</p>
-        <p class="hint-text" id="hintText">播放时不会显示词语，请认真听。</p>
+        <p class="phase-text" id="phaseText">请点击开始按钮</p>
+        <p class="hint-text" id="hintText">播放时请认真聆听所报词语。</p>
 
         <div class="noise-status is-hidden" id="noiseStatus" role="status" aria-live="polite">
-          <span class="noise-status-label">当前环境音</span>
+          <span class="noise-status-label">当前环境噪声</span>
           <strong id="noiseName"></strong>
-          <span class="noise-levels">噪声约 50 dB · 词语音频约 60 dB · 信噪比约 10 dB</span>
-          <span class="noise-calibration-note">实际分贝大小会因播放设备和系统音量而变化，仅供参考。准确数值需用声级计校准。</span>
+          <span class="noise-levels">信噪比（SNR）约为 +10 dB</span>
+          <span class="noise-calibration-note">实际音量会因播放设备和系统音量而有所不同，仅供参考。</span>
         </div>
 
         <div class="answer-card is-hidden" id="answerCard">
@@ -84,15 +84,16 @@
       <section class="notice-modal" id="noticeModal" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
         <div class="notice-card">
           <h2 id="noticeTitle">请在安静的环境中测试</h2>
-          <p>播放词语音频时会掺杂环境噪声。噪声约50dB，词语音频约60dB，信噪比约10dB。实际分贝大小会因播放设备和系统音量而变化，仅供参考。准确数值需用声级计校准。</p>
-          <p>请将嘴巴靠近手机，大声朗读。</p>
+          <p>请将嘴巴靠近设备，大声朗读。</p>
           <p>如果没听清，也请读出大概听到的发音，以便测出真实听力情况。</p>
+          <p>播放词语时会同时播放环境噪声，词语声音比环境噪声高约10分贝（信噪比约为+10dB）。实际音量会因播放设备和系统音量而有所不同，仅供参考。</p>
           <button class="primary-button" id="startButton" type="button">开始测试</button>
         </div>
       </section>
     </main>
 
     <script src="./words-data.js?v=20260715-rms-levels"></script>
-    <script src="./app.js?v=20260715-ios-audio"></script>
+    <script src="./audio-calibration.js?v=20260715-window-rms"></script>
+    <script src="./app.js?v=20260715-window-rms"></script>
   </body>
 </html>

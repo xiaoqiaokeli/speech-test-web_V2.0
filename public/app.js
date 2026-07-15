@@ -18,27 +18,18 @@
   const XFYUN_FRAME_BYTES = 1280;
   const XFYUN_FRAME_INTERVAL_MS = 25;
   const LAST_TEST_WORDS_KEY = "speech-test-last-words-v1";
-  const NOISE_LEVEL_DB = 50;
-  const SPEECH_LEVEL_DB = 60;
-  const SNR_DB = SPEECH_LEVEL_DB - NOISE_LEVEL_DB;
-  // 先将素材 RMS 归一化到有余量的数字声级，再维持 +10 dB SNR。
-  // 50/60 dB 是测试目标声级；绝对 dB SPL 仍需针对具体设备用声级计校准。
+  const SNR_DB = 10;
   const SPEECH_TARGET_DBFS = -27;
-  const NOISE_TARGET_DBFS = SPEECH_TARGET_DBFS - SNR_DB;
+  const NOISE_RMS_WINDOW_SECONDS = 2;
   const NOISE_TRACKS = [
-    { name: "雷雨声", src: "./audio/noise/打雷下雨.mp3", rmsDbfs: -13.1 },
-    { name: "揉纸张声", src: "./audio/noise/揉纸张声.mp3", rmsDbfs: -23.8 },
-    { name: "森林鸟语", src: "./audio/noise/森林鸟语.mp3", rmsDbfs: -23.9 },
-    { name: "言语噪声", src: "./audio/noise/言语噪音.mp3", rmsDbfs: -8.4 },
-    { name: "轻音乐 1", src: "./audio/noise/轻音乐1.mp3", rmsDbfs: -15.1 },
-    { name: "轻音乐 2", src: "./audio/noise/轻音乐2.mp3", rmsDbfs: -15.0 },
-    { name: "餐厅背景音", src: "./audio/noise/餐厅背景音.mp3", rmsDbfs: -10.0 }
+    { name: "交通噪声", src: "./audio/noise/交通噪声.mp3" },
+    { name: "雷雨声", src: "./audio/noise/打雷下雨.mp3" },
+    { name: "揉纸张声", src: "./audio/noise/揉纸张声.mp3" },
+    { name: "森林鸟语", src: "./audio/noise/森林鸟语.mp3" },
+    { name: "言语噪声", src: "./audio/noise/言语噪音.mp3" },
+    { name: "餐厅背景音", src: "./audio/noise/餐厅背景音.mp3" }
   ];
-
-  function volumeForTarget(sourceDbfs, targetDbfs, fallback) {
-    if (!Number.isFinite(sourceDbfs)) return fallback;
-    return Math.min(1, Math.pow(10, (targetDbfs - sourceDbfs) / 20));
-  }
+  const audioCalibration = window.SpeechTestAudio;
 
   const PHRASE_TONES = {
     "安排": "an1_pai2", "安全": "an1_quan2", "比较": "bi3_jiao4", "必须": "bi4_xu1", "表示": "biao3_shi4",
@@ -101,8 +92,10 @@
   let countdownTimer = null;
   let currentAudio = null;
   let currentNoiseAudio = null;
-  let noisePlaybackOrder = [];
-  let questionNoiseTracks = [];
+  let currentNoiseTrack = null;
+  let noiseCycle = null;
+  let noiseDecodeContext = null;
+  const noiseBufferPromises = new Map();
   let playbackRun = 0;
   let activeCleanup = null;
   let finalizing = false;
@@ -130,8 +123,7 @@
     currentIndex = 0;
     finalizing = false;
     recordingInProgress = false;
-    questionNoiseTracks = [];
-    noisePlaybackOrder = shuffle(NOISE_TRACKS);
+    noiseCycle = audioCalibration.createNoiseCycle(NOISE_TRACKS);
     testItems = selectTestItems(words, TEST_SIZE);
     localStorage.setItem(LAST_TEST_WORDS_KEY, JSON.stringify(testItems.map((item) => item.word)));
     elements.testPanel.classList.remove("is-hidden");
@@ -190,18 +182,80 @@
     // iOS 微信的播放许可与具体媒体元素绑定。始终复用同一个元素，只切换
     // src，首题在“开始测试”手势中解锁后，后续题目才能继续自动播放。
     if (currentNoiseAudio.getAttribute("src") !== track.src) {
+      saveNoiseCursor();
       currentNoiseAudio.src = track.src;
       currentNoiseAudio.load();
     }
+    currentNoiseTrack = track;
     return currentNoiseAudio;
   }
 
   function getNoiseTrackForQuestion(index) {
-    if (questionNoiseTracks[index]) return questionNoiseTracks[index];
-    const order = noisePlaybackOrder.length ? noisePlaybackOrder : NOISE_TRACKS;
-    const track = order[index % order.length];
-    questionNoiseTracks[index] = track;
-    return track;
+    if (!noiseCycle) noiseCycle = audioCalibration.createNoiseCycle(NOISE_TRACKS);
+    return noiseCycle.getTrack(index);
+  }
+
+  function getNoiseDecodeContext() {
+    if (!noiseDecodeContext) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error("当前浏览器不支持音频 RMS 计算");
+      noiseDecodeContext = new AudioContextClass();
+    }
+    return noiseDecodeContext;
+  }
+
+  function loadNoiseBuffer(track) {
+    if (!noiseBufferPromises.has(track.src)) {
+      const promise = fetch(track.src, { cache: "force-cache" })
+        .then((response) => {
+          if (!response.ok) throw new Error("环境噪声加载失败");
+          return response.arrayBuffer();
+        })
+        .then((arrayBuffer) => getNoiseDecodeContext().decodeAudioData(arrayBuffer))
+        .catch((error) => {
+          noiseBufferPromises.delete(track.src);
+          throw error;
+        });
+      noiseBufferPromises.set(track.src, promise);
+    }
+    return noiseBufferPromises.get(track.src);
+  }
+
+  function saveNoiseCursor() {
+    if (!currentNoiseAudio || !currentNoiseTrack || !noiseCycle) return;
+    const duration = currentNoiseAudio.duration;
+    const cursor = currentNoiseAudio.currentTime;
+    if (Number.isFinite(duration) && duration > 0 && Number.isFinite(cursor)) {
+      noiseCycle.saveCursor(currentNoiseTrack, cursor, duration);
+    }
+  }
+
+  function setNoiseCursor(audio, track, cursor, run) {
+    const applyCursor = () => {
+      if (run !== playbackRun || currentNoiseTrack !== track) return;
+      const duration = audio.duration;
+      audio.currentTime = audioCalibration.normalizeCursor(cursor, duration);
+    };
+    if (audio.readyState >= 1 && Number.isFinite(audio.duration)) {
+      applyCursor();
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const loaded = () => {
+        cleanup();
+        try { applyCursor(); resolve(); } catch (error) { reject(error); }
+      };
+      const failed = () => {
+        cleanup();
+        reject(audio.error || new Error("环境噪声加载失败"));
+      };
+      const cleanup = () => {
+        audio.removeEventListener("loadedmetadata", loaded);
+        audio.removeEventListener("error", failed);
+      };
+      audio.addEventListener("loadedmetadata", loaded, { once: true });
+      audio.addEventListener("error", failed, { once: true });
+    });
   }
 
   function resetNoisePlayback() {
@@ -210,6 +264,8 @@
       currentNoiseAudio.pause();
       try { currentNoiseAudio.currentTime = 0; } catch {}
     }
+    currentNoiseTrack = null;
+    noiseCycle = null;
   }
 
   function setNoiseStatus(track, visible) {
@@ -221,6 +277,7 @@
     if (currentNoiseAudio) {
       currentNoiseAudio.onerror = null;
       currentNoiseAudio.pause();
+      saveNoiseCursor();
     }
     setNoiseStatus(null, false);
   }
@@ -235,7 +292,7 @@
     showRetryable(sourceLabel + "加载失败", sourceLabel + "加载失败，请检查文件或网络连接后点击重试。", () => playCurrentWord());
   }
 
-  function playCurrentWord() {
+  async function playCurrentWord() {
     const item = testItems[currentIndex];
     finalizing = false;
     stopAudio();
@@ -249,8 +306,23 @@
     const noiseAudio = getNoiseAudioElement(noiseTrack);
     const run = playbackRun;
     setNoiseStatus(noiseTrack, false);
-    audio.volume = volumeForTarget(item.rmsDbfs, SPEECH_TARGET_DBFS, 1);
-    noiseAudio.volume = volumeForTarget(noiseTrack.rmsDbfs, NOISE_TARGET_DBFS, Math.pow(10, -SNR_DB / 20));
+    try {
+      const noiseBuffer = await loadNoiseBuffer(noiseTrack);
+      if (run !== playbackRun) return;
+      const cursor = noiseCycle.getCursor(noiseTrack, noiseBuffer.duration);
+      const noiseRms = audioCalibration.calculateLoopingWindowRms(noiseBuffer, cursor, NOISE_RMS_WINDOW_SECONDS);
+      const volumes = audioCalibration.calculateSnrVolumes(item.rmsDbfs, noiseRms, {
+        snrDb: SNR_DB,
+        speechTargetDbfs: SPEECH_TARGET_DBFS
+      });
+      audio.volume = volumes.speechVolume;
+      noiseAudio.volume = volumes.noiseVolume;
+      await setNoiseCursor(noiseAudio, noiseTrack, cursor, run);
+      if (run !== playbackRun) return;
+    } catch (error) {
+      handlePlaybackFailure(run, error, "环境噪声");
+      return;
+    }
     audio.onended = () => {
       if (run !== playbackRun) return;
       playbackRun += 1;
@@ -792,5 +864,6 @@
     stopNoise();
   }
   window.addEventListener("pagehide", stopAudio);
+  NOISE_TRACKS.forEach((track) => { loadNoiseBuffer(track).catch(() => {}); });
   if (!words.length) showFatal("没有找到词库", "请确认 words-data.js 已正确加载。");
 })();
