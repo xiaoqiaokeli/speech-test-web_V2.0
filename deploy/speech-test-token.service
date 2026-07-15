@@ -1,0 +1,17 @@
+[Unit]
+Description=Speech Test - Xfyun IAT token server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/speech-test/xfyun-token-server.py
+EnvironmentFile=/etc/speech-test/env
+Restart=always
+RestartSec=3
+User=nginx
+Group=nginx
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

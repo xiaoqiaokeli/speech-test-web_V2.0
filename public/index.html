@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>言语测试</title>
-    <link rel="stylesheet" href="./styles.css?v=20260704-qr-large" />
+    <link rel="stylesheet" href="./styles.css?v=20260715-noise-mix" />
   </head>
   <body>
     <main id="app" class="app-shell" aria-live="polite">
@@ -16,6 +16,8 @@
         </div>
         <div class="progress-pill" id="progressText">0 / 15</div>
       </section>
+
+      <p class="brand-line">本测试由微信公众号「耳聋耳鸣听力咨询」提供</p>
 
       <section class="test-panel" id="testPanel">
         <div class="progress-track" aria-hidden="true">
@@ -28,6 +30,12 @@
 
         <p class="phase-text" id="phaseText">点击开始后自动播放词语</p>
         <p class="hint-text" id="hintText">播放时不会显示词语，请认真听。</p>
+
+        <div class="noise-status is-hidden" id="noiseStatus" role="status" aria-live="polite">
+          <span class="noise-status-label">当前环境音</span>
+          <strong id="noiseName"></strong>
+          <span class="noise-levels">目标声级：背景 50 dB · 人声 60 dB · SNR +10 dB</span>
+        </div>
 
         <div class="answer-card is-hidden" id="answerCard">
           <div class="answer-line">
@@ -43,6 +51,7 @@
         <div class="result-flash is-hidden" id="resultFlash"></div>
         <button class="resume-button is-hidden" id="resumeAudioButton" type="button">点击继续播放</button>
         <button class="record-button is-hidden" id="recordButton" type="button">点击开始录音</button>
+        <button class="record-button is-hidden" id="retryButton" type="button">重试</button>
       </section>
 
       <section class="result-panel is-hidden" id="resultPanel">
@@ -53,13 +62,9 @@
         </div>
 
         <section class="wechat-follow" aria-labelledby="wechatFollowTitle">
-          <div class="wechat-qr-frame">
-            <img src="./official-account-qr.png" alt="耳聋耳鸣听力咨询公众号二维码" onerror="this.closest('.wechat-follow').classList.add('qr-missing');" />
-            <div class="qr-placeholder" aria-hidden="true">二维码<br />待上传</div>
-          </div>
           <div class="wechat-copy">
             <h2 id="wechatFollowTitle">了解详细信息</h2>
-            <p>若想了解详细信息，请扫描二维码关注公众号<strong>耳聋耳鸣听力咨询</strong>。</p>
+            <p>如需听力咨询，可在微信搜索公众号<strong>耳聋耳鸣听力咨询</strong>。</p>
           </div>
         </section>
 
@@ -78,6 +83,7 @@
       <section class="notice-modal" id="noticeModal" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
         <div class="notice-card">
           <h2 id="noticeTitle">请在安静环境中测试</h2>
+          <p>词语播放时会自动加入日常环境噪声，录音、识别、判断和结果阶段不会播放噪声。</p>
           <p>嘴巴靠近手机，大声朗读。录音越清楚，结果越准确。</p>
           <p>如果没听清，也请读出大概听到的发音，这样才能测出真实听力情况。</p>
           <button class="primary-button" id="startButton" type="button">开始测试</button>
@@ -85,7 +91,7 @@
       </section>
     </main>
 
-    <script src="./words-data.js"></script>
-    <script src="./app.js?v=20260705-vad-desktop"></script>
+    <script src="./words-data.js?v=20260715-rms-levels"></script>
+    <script src="./app.js?v=20260715-noise-mix"></script>
   </body>
 </html>

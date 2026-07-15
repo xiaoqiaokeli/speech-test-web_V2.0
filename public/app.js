@@ -18,6 +18,27 @@
   const XFYUN_FRAME_BYTES = 1280;
   const XFYUN_FRAME_INTERVAL_MS = 25;
   const LAST_TEST_WORDS_KEY = "speech-test-last-words-v1";
+  const NOISE_LEVEL_DB = 50;
+  const SPEECH_LEVEL_DB = 60;
+  const SNR_DB = SPEECH_LEVEL_DB - NOISE_LEVEL_DB;
+  // 先将素材 RMS 归一化到有余量的数字声级，再维持 +10 dB SNR。
+  // 50/60 dB 是测试目标声级；绝对 dB SPL 仍需针对具体设备用声级计校准。
+  const SPEECH_TARGET_DBFS = -27;
+  const NOISE_TARGET_DBFS = SPEECH_TARGET_DBFS - SNR_DB;
+  const NOISE_TRACKS = [
+    { name: "交通噪声", src: "./audio/noise/噪音-交通噪声.mp3", rmsDbfs: -12.5 },
+    { name: "言语噪声", src: "./audio/noise/噪音-言语噪音.mp3", rmsDbfs: -8.4 },
+    { name: "餐厅背景音", src: "./audio/noise/噪音-餐厅背景音.mp3", rmsDbfs: -10.0 },
+    { name: "雷雨声", src: "./audio/noise/打雷下雨.mp3", rmsDbfs: -13.1 },
+    { name: "洗衣机声", src: "./audio/noise/洗衣机声.mp3", rmsDbfs: -18.0 },
+    { name: "碗碟碰撞声", src: "./audio/noise/碗碰撞声.mp3", rmsDbfs: -20.1 },
+    { name: "脚步声", src: "./audio/noise/脚步声音.mp3", rmsDbfs: -28.7 }
+  ];
+
+  function volumeForTarget(sourceDbfs, targetDbfs, fallback) {
+    if (!Number.isFinite(sourceDbfs)) return fallback;
+    return Math.min(1, Math.pow(10, (targetDbfs - sourceDbfs) / 20));
+  }
 
   const PHRASE_TONES = {
     "安排": "an1_pai2", "安全": "an1_quan2", "比较": "bi3_jiao4", "必须": "bi4_xu1", "表示": "biao3_shi4",
@@ -62,6 +83,8 @@
     hintText: document.getElementById("hintText"), answerCard: document.getElementById("answerCard"),
     answerText: document.getElementById("answerText"), heardText: document.getElementById("heardText"), resultFlash: document.getElementById("resultFlash"),
     resumeAudioButton: document.getElementById("resumeAudioButton"), recordButton: document.getElementById("recordButton"),
+    retryButton: document.getElementById("retryButton"), noiseStatus: document.getElementById("noiseStatus"),
+    noiseName: document.getElementById("noiseName"),
     noticeModal: document.getElementById("noticeModal"), startButton: document.getElementById("startButton"),
     restartButton: document.getElementById("restartButton"), testPanel: document.getElementById("testPanel"),
     resultPanel: document.getElementById("resultPanel"), correctCount: document.getElementById("correctCount"),
@@ -77,14 +100,24 @@
   let currentIndex = 0;
   let countdownTimer = null;
   let currentAudio = null;
+  let currentNoiseAudio = null;
+  let questionNoiseTracks = [];
+  let playbackRun = 0;
   let activeCleanup = null;
   let finalizing = false;
   let recordingInProgress = false;
   let recognitionRun = 0;
+  let retryAction = null;
 
   elements.startButton.addEventListener("click", () => { elements.noticeModal.classList.add("is-hidden"); startTest(); });
   elements.resumeAudioButton.addEventListener("click", () => { elements.resumeAudioButton.classList.add("is-hidden"); playCurrentWord(); });
   elements.recordButton.addEventListener("click", () => { elements.recordButton.classList.add("is-hidden"); beginXfyunRecognition({ manual: true }); });
+  elements.retryButton.addEventListener("click", () => {
+    elements.retryButton.classList.add("is-hidden");
+    const action = retryAction;
+    retryAction = null;
+    if (action) action();
+  });
   elements.restartButton.addEventListener("click", () => startTest());
 
   function startTest() {
@@ -95,6 +128,7 @@
     currentIndex = 0;
     finalizing = false;
     recordingInProgress = false;
+    questionNoiseTracks = [];
     testItems = selectTestItems(words, TEST_SIZE);
     localStorage.setItem(LAST_TEST_WORDS_KEY, JSON.stringify(testItems.map((item) => item.word)));
     elements.testPanel.classList.remove("is-hidden");
@@ -139,29 +173,110 @@
     return currentAudio;
   }
 
+  function getNoiseAudioElement() {
+    if (!currentNoiseAudio) {
+      currentNoiseAudio = document.createElement("audio");
+      currentNoiseAudio.preload = "auto";
+      currentNoiseAudio.loop = true;
+      currentNoiseAudio.setAttribute("playsinline", "");
+      currentNoiseAudio.style.display = "none";
+      document.body.appendChild(currentNoiseAudio);
+    }
+    return currentNoiseAudio;
+  }
+
+  function getNoiseTrackForQuestion(index) {
+    if (questionNoiseTracks[index]) return questionNoiseTracks[index];
+    const previous = questionNoiseTracks[index - 1];
+    const choices = previous && NOISE_TRACKS.length > 1
+      ? NOISE_TRACKS.filter((track) => track.src !== previous.src)
+      : NOISE_TRACKS;
+    const track = choices[Math.floor(Math.random() * choices.length)];
+    questionNoiseTracks[index] = track;
+    return track;
+  }
+
+  function setNoiseStatus(track, visible) {
+    elements.noiseName.textContent = track?.name || "";
+    elements.noiseStatus.classList.toggle("is-hidden", !visible);
+  }
+
+  function stopNoise() {
+    if (currentNoiseAudio) {
+      currentNoiseAudio.onerror = null;
+      currentNoiseAudio.pause();
+      currentNoiseAudio.currentTime = 0;
+    }
+    setNoiseStatus(null, false);
+  }
+
+  function handlePlaybackFailure(run, error, sourceLabel) {
+    if (run !== playbackRun) return;
+    stopAudio();
+    if (error?.name === "NotAllowedError") {
+      showPlaybackBlocked();
+      return;
+    }
+    showRetryable(sourceLabel + "加载失败", sourceLabel + "加载失败，请检查文件或网络连接后点击重试。", () => playCurrentWord());
+  }
+
   function playCurrentWord() {
     const item = testItems[currentIndex];
     finalizing = false;
+    stopAudio();
     setProgress();
     setPhase("playing");
     hideFlash();
     hideAnswer();
     hideActionButtons();
-    stopAudio();
     const audio = getAudioElement();
-    audio.onended = () => beginXfyunRecognition({ manual: false });
-    audio.onerror = () => finalizeCurrent("音频播放失败");
+    const noiseAudio = getNoiseAudioElement();
+    const noiseTrack = getNoiseTrackForQuestion(currentIndex);
+    const run = playbackRun;
+    setNoiseStatus(noiseTrack, false);
+    audio.volume = volumeForTarget(item.rmsDbfs, SPEECH_TARGET_DBFS, 1);
+    noiseAudio.volume = volumeForTarget(noiseTrack.rmsDbfs, NOISE_TARGET_DBFS, Math.pow(10, -SNR_DB / 20));
+    audio.onended = () => {
+      if (run !== playbackRun) return;
+      playbackRun += 1;
+      stopNoise();
+      beginXfyunRecognition({ manual: false });
+    };
+    audio.onerror = () => handlePlaybackFailure(run, audio.error, "词语音频");
+    noiseAudio.onerror = () => handlePlaybackFailure(run, noiseAudio.error, "环境音");
     audio.src = item.audio;
+    noiseAudio.src = noiseTrack.src;
     audio.load();
-    const playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === "function") playPromise.catch(() => showPlaybackBlocked());
+    noiseAudio.load();
+    const speechPlay = audio.play();
+    const noisePlay = noiseAudio.play();
+    Promise.all([speechPlay, noisePlay])
+      .then(() => { if (run === playbackRun) setNoiseStatus(noiseTrack, true); })
+      .catch((error) => handlePlaybackFailure(run, error, "音频"));
   }
-
   function showPlaybackBlocked() {
     elements.screenTitle.textContent = "需要点击播放";
     elements.phaseText.textContent = "请点击继续播放";
     elements.hintText.textContent = "苹果浏览器限制了自动播放声音，请点一下继续。";
     elements.resumeAudioButton.classList.remove("is-hidden");
+  }
+
+  function showRetryable(title, message, action) {
+    stopActiveRecording();
+    stopAudio();
+    clearTimeout(countdownTimer);
+    hideFlash();
+    hideAnswer();
+    hideActionButtons();
+    finalizing = false;
+    recordingInProgress = false;
+    retryAction = action;
+    elements.screenTitle.textContent = title;
+    elements.phaseText.textContent = title;
+    elements.hintText.textContent = message;
+    elements.statusOrb.className = "status-orb wrong";
+    setStatusIcon(ICONS.alert);
+    elements.retryButton.classList.remove("is-hidden");
   }
 
   function showManualRecordStart(message) {
@@ -172,6 +287,7 @@
 
   async function beginXfyunRecognition(options = {}) {
     if (recordingInProgress || finalizing) return;
+    stopNoise();
     recordingInProgress = true;
     const manual = options.manual === true;
     elements.recordButton.classList.add("is-hidden");
@@ -179,10 +295,14 @@
     try {
       const response = await fetch("/api/xfyun-token", { cache: "no-store" });
       signed = await response.json();
-      if (!response.ok || !signed.url || !signed.appId) throw new Error(signed.error || "讯飞签名接口不可用");
+      if (!response.ok || !signed.url || !signed.appId) throw new Error(signed.error || "server-config");
     } catch (error) {
       recordingInProgress = false;
-      return showFatal("讯飞接口未配置", "请检查 Cloudflare Pages 环境变量和 /api/xfyun-token 是否正常。");
+      // fetch 在断网时抛 TypeError；服务器有响应但内容异常则是服务问题
+      if (error instanceof TypeError) {
+        return showRetryable("网络连接失败", "无法连接语音识别服务，请检查网络后点击重试。", () => beginXfyunRecognition({ manual: true }));
+      }
+      return showRetryable("语音服务暂不可用", "语音识别服务出现问题，请稍后点击重试。若持续出现，请联系我们。", () => beginXfyunRecognition({ manual: true }));
     }
 
     try {
@@ -197,6 +317,10 @@
         recordingInProgress = false;
         showManualRecordStart("浏览器限制了自动录音，请点一下开始录音。");
         return;
+      }
+      if (isNetworkError(error)) {
+        recordingInProgress = false;
+        return showRetryable("网络连接失败", "识别时网络出现问题，请检查网络后点击重试，并重新朗读。", () => beginXfyunRecognition({ manual: true }));
       }
       finalizeCurrent(error.message || "识别失败");
     } finally {
@@ -328,6 +452,11 @@
     return ["NotAllowedError", "SecurityError", "InvalidStateError", "NotReadableError"].includes(name) || message.includes("麦克风") || message.includes("microphone");
   }
 
+  function isNetworkError(error) {
+    const message = String(error?.message || "");
+    return message.includes("连接失败") || error instanceof TypeError;
+  }
+
   function recognizeWithXfyun({ url, appId }, pcm) {
     return new Promise((resolve, reject) => {
       if (!pcm.length) return reject(new Error("未识别到声音"));
@@ -441,11 +570,9 @@
     if (finalizing) return;
     finalizing = true;
     const item = testItems[currentIndex];
-    const rawText = String(rawHeard || "");
-    const heard = cleanChinese(rawText) || rawText || "未识别到声音";
-    const matched = isPronunciationMatch(item.word, heard);
-    answers.push({ item, heard, correct: matched, order: currentIndex + 1 });
-    showJudgement(matched, item, heard);
+    const { correct, display } = judgePronunciation(item.word, rawHeard);
+    answers.push({ item, heard: display, correct, order: currentIndex + 1 });
+    showJudgement(correct, item, display);
     startCountdown(currentIndex >= testItems.length - 1);
   }
 
@@ -472,14 +599,76 @@
     countdownTimer = window.setTimeout(tick, 1000);
   }
 
-  function isPronunciationMatch(expected, actual) {
+  function judgePronunciation(expected, rawHeard) {
     const cleanExpected = cleanChinese(expected);
-    const cleanActual = cleanChinese(actual);
+    const rawText = String(rawHeard || "");
+    const cleanActual = cleanChinese(rawText);
+    const base = stripFillers(cleanActual);
+    const tail = stripFillers(textAfterLastCorrection(cleanActual));
+
+    // 依次尝试：改口后的内容（优先）、去语气词后的整体
+    let matchedCandidate = "";
+    if (cleanExpected) {
+      for (const candidate of [tail, base]) {
+        if (candidate && (isBasicMatch(cleanExpected, candidate) || isRepeatedMatch(cleanExpected, candidate))) {
+          matchedCandidate = candidate;
+          break;
+        }
+      }
+    }
+
+    // “你所说的”显示真正用于判断的内容：改口后、去语气词、合并重复
+    const effective = matchedCandidate || tail || base;
+    const display = collapseRepeats(effective, cleanExpected.length) || effective || cleanActual || rawText || "未识别到声音";
+    return { correct: Boolean(matchedCandidate), display };
+  }
+
+  function isBasicMatch(cleanExpected, cleanActual) {
     if (cleanActual.length !== cleanExpected.length) return false;
     if (cleanActual === cleanExpected) return true;
     const expectedTone = getToneKey(cleanExpected);
     const actualTone = getToneKey(cleanActual);
     return Boolean(expectedTone && actualTone && expectedTone === actualTone);
+  }
+
+  const CORRECTION_MARKERS = ["不是", "不对", "错了", "说错", "应该是", "应该说", "改成", "换成", "重说", "重来"];
+  const FILLER_CHARS = new Set(Array.from("嗯啊呃哦噢喔唉哎呀嘛"));
+
+  function stripFillers(text) {
+    const chars = Array.from(text);
+    let start = 0;
+    let end = chars.length;
+    while (start < end && FILLER_CHARS.has(chars[start])) start += 1;
+    while (end > start && FILLER_CHARS.has(chars[end - 1])) end -= 1;
+    return chars.slice(start, end).join("");
+  }
+
+  function isRepeatedMatch(cleanExpected, cleanActual) {
+    const unit = cleanExpected.length;
+    if (!unit || cleanActual.length < unit * 2 || cleanActual.length % unit !== 0) return false;
+    for (let i = 0; i < cleanActual.length; i += unit) {
+      if (!isBasicMatch(cleanExpected, cleanActual.slice(i, i + unit))) return false;
+    }
+    return true;
+  }
+
+  // 形如“大学大学”的完整重复，显示时合并为“大学”（各段必须完全一致）
+  function collapseRepeats(text, unitLen) {
+    if (!text || !unitLen || text.length < unitLen * 2 || text.length % unitLen !== 0) return "";
+    const unit = text.slice(0, unitLen);
+    for (let i = unitLen; i < text.length; i += unitLen) {
+      if (text.slice(i, i + unitLen) !== unit) return "";
+    }
+    return unit;
+  }
+
+  function textAfterLastCorrection(text) {
+    let bestEnd = -1;
+    for (const marker of CORRECTION_MARKERS) {
+      const index = text.lastIndexOf(marker);
+      if (index !== -1 && index + marker.length > bestEnd) bestEnd = index + marker.length;
+    }
+    return bestEnd === -1 ? "" : text.slice(bestEnd);
   }
 
   function getToneKey(text) {
@@ -512,6 +701,7 @@
   }
 
   function setPhase(phase) {
+    if (phase !== "playing") stopNoise();
     elements.statusOrb.className = `status-orb ${phase}`;
     const phaseData = {
       playing: ["正在播放", "请认真听，词语不会显示在屏幕上。", ICONS.play, "第 " + (currentIndex + 1) + " 题"],
@@ -534,7 +724,7 @@
   function hideAnswer() { elements.answerText.textContent = ""; elements.heardText.textContent = ""; elements.answerCard.classList.add("is-hidden"); }
   function showFlash(correct) { elements.resultFlash.textContent = correct ? "正确" : "错误"; elements.resultFlash.className = `result-flash ${correct ? "good" : "bad"}`; }
   function hideFlash() { elements.resultFlash.className = "result-flash is-hidden"; }
-  function hideActionButtons() { elements.resumeAudioButton.classList.add("is-hidden"); elements.recordButton.classList.add("is-hidden"); }
+  function hideActionButtons() { elements.resumeAudioButton.classList.add("is-hidden"); elements.recordButton.classList.add("is-hidden"); elements.retryButton.classList.add("is-hidden"); retryAction = null; }
 
   function showResults() {
     stopActiveRecording();
@@ -578,6 +768,16 @@
     elements.testPanel.classList.remove("is-hidden");
   }
 
-  function stopAudio() { if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; } }
+  function stopAudio() {
+    playbackRun += 1;
+    if (currentAudio) {
+      currentAudio.onended = null;
+      currentAudio.onerror = null;
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
+    stopNoise();
+  }
+  window.addEventListener("pagehide", stopAudio);
   if (!words.length) showFatal("没有找到词库", "请确认 words-data.js 已正确加载。");
 })();
