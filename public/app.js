@@ -689,7 +689,9 @@
     const rawText = String(rawHeard || "");
     const cleanActual = cleanChinese(rawText);
     const base = stripFillers(cleanActual);
-    const tail = stripFillers(textAfterLastCorrection(cleanActual));
+    const correction = getCorrectionParts(cleanActual, cleanExpected.length);
+    const rawTail = stripFillers(correction.tail);
+    const tail = stripOptionalCorrectionConnector(rawTail, cleanExpected, correction.hasExplicit);
 
     // 依次尝试：改口后的内容（优先）、去语气词后的整体
     let matchedCandidate = "";
@@ -702,9 +704,11 @@
       }
     }
 
-    // “你所说的”显示真正用于判断的内容：改口后、去语气词、合并重复
-    const effective = matchedCandidate || tail || base;
-    const display = collapseRepeats(effective, cleanExpected.length) || effective || cleanActual || rawText || "未识别到声音";
+    // 判对时只显示命中的答案；明确改口后仍判错时，显示改口词之后的完整内容。
+    // 只有“应该是”等软标记而没有明确改口词时，仍显示完整识别原话。
+    const correctionDisplay = stripFillers(correction.displayTail);
+    const displaySource = matchedCandidate || correctionDisplay || cleanActual;
+    const display = collapseRepeats(displaySource, cleanExpected.length) || displaySource || rawText || "未识别到声音";
     return { correct: Boolean(matchedCandidate), display };
   }
 
@@ -717,7 +721,9 @@
   }
 
   const CORRECTION_MARKERS = ["不是", "不对", "错了", "说错", "应该是", "应该说", "改成", "换成", "重说", "重来"];
+  const EXPLICIT_CORRECTION_MARKERS = new Set(["不是", "不对", "错了", "说错", "改成", "换成", "重说", "重来"]);
   const FILLER_CHARS = new Set(Array.from("嗯啊呃哦噢喔唉哎呀嘛"));
+  const NON_ANSWER_PREFIXES = new Set(["我觉得", "我猜", "好像", "也许", "可能", "大概", "似乎", "答案", "我说", "应该", "肯定", "绝对"]);
 
   function stripFillers(text) {
     const chars = Array.from(text);
@@ -726,6 +732,13 @@
     while (start < end && FILLER_CHARS.has(chars[start])) start += 1;
     while (end > start && FILLER_CHARS.has(chars[end - 1])) end -= 1;
     return chars.slice(start, end).join("");
+  }
+
+  function stripOptionalCorrectionConnector(text, cleanExpected, hasExplicit) {
+    if (!hasExplicit || !text.startsWith("是")) return text;
+    const candidate = stripFillers(text.slice(1));
+    const matches = candidate && (isBasicMatch(cleanExpected, candidate) || isRepeatedMatch(cleanExpected, candidate));
+    return matches ? candidate : text;
   }
 
   function isRepeatedMatch(cleanExpected, cleanActual) {
@@ -747,13 +760,37 @@
     return unit;
   }
 
-  function textAfterLastCorrection(text) {
-    let bestEnd = -1;
+  function getCorrectionParts(text, expectedLength) {
+    const occurrences = [];
     for (const marker of CORRECTION_MARKERS) {
-      const index = text.lastIndexOf(marker);
-      if (index !== -1 && index + marker.length > bestEnd) bestEnd = index + marker.length;
+      let fromIndex = 0;
+      while (fromIndex < text.length) {
+        const index = text.indexOf(marker, fromIndex);
+        if (index === -1) break;
+        occurrences.push({ marker, index, end: index + marker.length });
+        fromIndex = index + marker.length;
+      }
     }
-    return bestEnd === -1 ? "" : text.slice(bestEnd);
+    occurrences.sort((a, b) => a.index - b.index || a.end - b.end);
+
+    const firstCorrection = occurrences.find(({ index }) => {
+      const priorAnswer = stripFillers(text.slice(0, index));
+      return priorAnswer.length === expectedLength && !NON_ANSWER_PREFIXES.has(priorAnswer);
+    });
+    if (!firstCorrection) return { tail: "", displayTail: "", hasExplicit: false };
+
+    let bestEnd = firstCorrection.end;
+    let firstExplicit = null;
+    for (const occurrence of occurrences) {
+      if (occurrence.index < firstCorrection.index) continue;
+      if (!firstExplicit && EXPLICIT_CORRECTION_MARKERS.has(occurrence.marker)) firstExplicit = occurrence;
+      if (occurrence.end > bestEnd) bestEnd = occurrence.end;
+    }
+    return {
+      tail: text.slice(bestEnd),
+      displayTail: firstExplicit ? text.slice(firstExplicit.end) : "",
+      hasExplicit: Boolean(firstExplicit)
+    };
   }
 
   function getToneKey(text) {
