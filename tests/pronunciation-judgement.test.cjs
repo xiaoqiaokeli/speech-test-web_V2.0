@@ -94,6 +94,17 @@ test("明确改口词没有语气停顿也可识别可能为旧答案", () => {
   }
 });
 
+test("明确改口前的旧答案不要求与正确答案字数相同", () => {
+  assert.deepEqual(judge("整齐", "这哦不对整齐"), { correct: true, display: "整齐" });
+  assert.deepEqual(judge("整齐", "这不对整齐"), { correct: true, display: "整齐" });
+  assert.deepEqual(judge("整齐", "这不是那个哦不对整齐"), { correct: true, display: "整齐" });
+});
+
+test("不同字数的旧答案使用软改口词时仍需停顿边界", () => {
+  assert.deepEqual(judge("整齐", "这应该是整齐"), { correct: false, display: "这应该是整齐" });
+  assert.deepEqual(judge("整齐", "这哦应该是整齐"), { correct: true, display: "整齐" });
+});
+
 test("没有改口边界的软表达仍按不确定处理", () => {
   for (const marker of ["应该是", "应该说"]) {
     const heard = `可能${marker}颜色`;

@@ -213,13 +213,14 @@
 
     const firstCorrection = occurrences.find(({ marker, index }) => {
       const priorAnswer = stripFillers(text.slice(0, index));
-      if (priorAnswer.length !== expectedLength) return false;
-      if (!NON_ANSWER_PREFIXES.has(priorAnswer)) return true;
+      if (!priorAnswer) return false;
 
-      // “可能、也许”等既可能是语气前缀，也可能是用户第一次读出的词。
-      // 明确改口词可直接消除歧义；软改口词需要“哦、嗯”等停顿边界。
+      // 明确改口词前只要已有回答即可，旧答案不要求与正确答案字数相同。
+      if (EXPLICIT_CORRECTION_MARKERS.has(marker)) return true;
+
+      // “应该是”等软改口词仍需要停顿边界，或一个长度合理且不是犹豫前缀的旧答案。
       const hasFillerBoundary = index > 0 && FILLER_CHARS.has(text[index - 1]);
-      return hasFillerBoundary || EXPLICIT_CORRECTION_MARKERS.has(marker);
+      return hasFillerBoundary || (priorAnswer.length === expectedLength && !NON_ANSWER_PREFIXES.has(priorAnswer));
     });
     if (!firstCorrection) return { tail: "", displayTail: "", hasExplicit: false };
 
