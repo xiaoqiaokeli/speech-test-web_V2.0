@@ -344,7 +344,7 @@
     setPhase("recording-ready");
     elements.hintText.textContent = message || "浏览器限制了自动录音，请点一下开始录音。";
     elements.recordButton.classList.remove("is-hidden");
-    elements.skipButton.classList.remove("is-hidden");
+    elements.skipButton.classList.add("is-hidden");
   }
 
   async function beginXfyunRecognition(options = {}) {
@@ -374,6 +374,7 @@
       setPhase("recording");
       const pcm = await recordPcm(RECORD_MAX_MS, () => elements.skipButton.classList.remove("is-hidden"));
       if (run !== recognitionRun) return;
+      elements.skipButton.classList.add("is-hidden");
       setPhase("recognizing");
       const text = await recognizeWithXfyun(signed, pcm);
       if (run !== recognitionRun) return;
@@ -642,8 +643,8 @@
     finalizing = true;
     elements.skipButton.classList.add("is-hidden");
     const item = testItems[currentIndex];
-    const { correct, display } = pronunciationJudge.judgePronunciation(item.word, rawHeard);
-    answers.push({ item, heard: display, correct, order: currentIndex + 1 });
+    const { correct, display, reason } = pronunciationJudge.judgePronunciation(item.word, rawHeard);
+    answers.push({ item, heard: display, correct, reason, order: currentIndex + 1 });
     showJudgement(correct, item, display);
     startCountdown(currentIndex >= testItems.length - 1);
   }
@@ -681,7 +682,7 @@
     clearTimeout(countdownTimer);
     hideActionButtons();
     const item = testItems[currentIndex];
-    answers.push({ item, heard: "已跳过", correct: false, order: currentIndex + 1 });
+    answers.push({ item, heard: "已跳过", correct: false, reason: "已跳过", order: currentIndex + 1 });
     currentIndex += 1;
     if (currentIndex >= testItems.length) showResults();
     else playCurrentWord();
@@ -738,7 +739,22 @@
     answers.slice().sort((a, b) => a.correct !== b.correct ? (a.correct ? 1 : -1) : a.order - b.order).forEach((answer) => {
       const li = document.createElement("li");
       li.className = answer.correct ? "correct-row" : "wrong-row";
-      li.innerHTML = `<span class="seq">第${answer.order}题</span><span class="answer">${answer.item.word}</span><span class="heard">${answer.heard || "未识别"}</span>`;
+      const seq = document.createElement("span");
+      const expected = document.createElement("span");
+      const heard = document.createElement("span");
+      seq.className = "seq";
+      expected.className = "answer";
+      heard.className = "heard";
+      seq.textContent = `第${answer.order}题`;
+      expected.textContent = answer.item.word;
+      heard.textContent = answer.heard || "未识别";
+      li.append(seq, expected, heard);
+      if (!answer.correct) {
+        const reason = document.createElement("span");
+        reason.className = "reason";
+        reason.textContent = `判错原因：${answer.reason || "答案与正确答案不一致"}`;
+        li.appendChild(reason);
+      }
       elements.resultList.appendChild(li);
     });
     elements.testPanel.classList.add("is-hidden");

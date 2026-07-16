@@ -86,6 +86,7 @@ h1 { margin-bottom: 0; font-size: 30px; line-height: 1.16; letter-spacing: 0; }
 .result-list .seq { color: var(--muted); font-size: 16px; font-weight: 400; }
 .result-list .answer { font-weight: 400; }
 .result-list .heard { color: var(--text); overflow-wrap: anywhere; }
+.result-list .reason { grid-column: 2 / -1; margin-top: -4px; color: var(--muted); font-size: 15px; font-weight: 600; }
 .result-list .wrong-row .answer, .result-list .wrong-row .heard { color: var(--bad); }
 .result-list .correct-row .answer, .result-list .correct-row .heard { color: var(--good); }
 .notice-modal { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 18px; background: rgba(10, 33, 31, 0.45); }

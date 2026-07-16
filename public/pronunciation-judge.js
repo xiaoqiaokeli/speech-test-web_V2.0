@@ -34,6 +34,11 @@
   };
 
   const charToneMap = buildCharToneMap(PHRASE_TONES);
+  const INCORRECT_REASONS = {
+    no_sound: "未识别到声音",
+    answer_mismatch: "答案与正确答案不一致",
+    uncertain_expression: "包含不确定语气"
+  };
 
   function judgePronunciation(expected, rawHeard) {
     const cleanExpected = cleanChinese(expected);
@@ -55,12 +60,14 @@
       }
     }
 
-    // 判对时只显示命中的答案；明确改口后仍判错时，显示改口词之后的完整内容。
+    // 无论判对或判错，明确改口后的展示都使用最后一次改口后的候选答案。
     // 只有“应该是”等软标记而没有明确改口词时，仍显示完整识别原话。
-    const correctionDisplay = normalizeCorrectionDisplay(correction.displayTail, cleanExpected, correction.hasExplicit);
+    const correctionDisplay = normalizeCorrectionDisplay(rawTail, cleanExpected, correction.hasExplicit);
     const displaySource = matchedCandidate || correctionDisplay || cleanActual;
     const display = collapseRepeats(displaySource, cleanExpected.length) || displaySource || rawText || "未识别到声音";
-    return { correct: Boolean(matchedCandidate), display };
+    const correct = Boolean(matchedCandidate);
+    const reasonCode = correct ? null : getIncorrectReasonCode(rawText, cleanActual, cleanExpected, correction);
+    return { correct, display, reasonCode, reason: reasonCode ? INCORRECT_REASONS[reasonCode] : "" };
   }
 
   function isBasicMatch(cleanExpected, cleanActual) {
@@ -71,10 +78,26 @@
     return Boolean(expectedTone && actualTone && expectedTone === actualTone);
   }
 
-  const CORRECTION_MARKERS = ["不是", "不对", "错了", "说错", "应该是", "应该说", "改成", "换成", "重说", "重来"];
-  const EXPLICIT_CORRECTION_MARKERS = new Set(["不是", "不对", "错了", "说错", "改成", "换成", "重说", "重来"]);
+  const SOFT_CORRECTION_MARKERS = ["应该是", "应该说"];
+  const RESTART_MARKERS = buildRestartMarkers();
+  const EXPLICIT_CORRECTION_MARKERS = new Set([
+    "不是", "不对", "错了", "说错了", "说错", "改成", "改为", "换成", "换为", ...RESTART_MARKERS
+  ]);
+  const CORRECTION_MARKERS = [...EXPLICIT_CORRECTION_MARKERS, ...SOFT_CORRECTION_MARKERS];
   const FILLER_CHARS = new Set(Array.from("嗯啊呃哦噢喔唉哎呀嘛"));
   const NON_ANSWER_PREFIXES = new Set(["我觉得", "我猜", "好像", "也许", "可能", "大概", "似乎", "答案", "我说", "应该", "肯定", "绝对"]);
+
+  function buildRestartMarkers() {
+    const markers = new Set(["重来", "重说", "重读", "重念", "重新开始", "从头开始"]);
+    const suffixes = ["", "一次", "一遍", "一下"];
+    for (const prefix of ["重新", "再", "从头"]) {
+      for (const action of ["来", "说", "读", "念", "回答"]) {
+        for (const suffix of suffixes) markers.add(prefix + action + suffix);
+      }
+    }
+    for (const marker of Array.from(markers)) markers.add("我" + marker);
+    return Array.from(markers);
+  }
 
   function stripFillers(text) {
     const chars = Array.from(text);
@@ -116,9 +139,25 @@
   }
 
   function normalizeCorrectionDisplay(text, cleanExpected, hasExplicit) {
-    const display = stripFillers(text);
-    if (!hasExplicit || !display.startsWith("是") || cleanExpected.startsWith("是")) return display;
-    return stripFillers(display.slice(1));
+    if (!hasExplicit) return "";
+    let display = stripFillers(text);
+    if (display.startsWith("是") && !cleanExpected.startsWith("是")) display = stripFillers(display.slice(1));
+    if (display.endsWith("才对")) display = stripFillers(display.slice(0, -2));
+    return display;
+  }
+
+  function getIncorrectReasonCode(rawText, cleanActual, cleanExpected, correction) {
+    if (!cleanActual || /未识别到声音|未检测到声音|没有识别到声音/.test(rawText)) return "no_sound";
+    if (containsUncertainExpression(cleanActual, cleanExpected, correction)) return "uncertain_expression";
+    return "answer_mismatch";
+  }
+
+  function containsUncertainExpression(text, cleanExpected, correction) {
+    if (text.includes("吧") || SOFT_CORRECTION_MARKERS.some((marker) => text.includes(marker))) return true;
+    if (correction.hasExplicit) return false;
+    return ["我觉得", "我猜", "好像", "也许", "可能", "大概", "似乎"].some((prefix) => (
+      text.startsWith(prefix) && text.length > cleanExpected.length
+    ));
   }
 
   function isFillerSeparatedRepeatedMatch(cleanExpected, text) {
@@ -169,11 +208,18 @@
         fromIndex = index + marker.length;
       }
     }
-    occurrences.sort((a, b) => a.index - b.index || a.end - b.end);
+    // 同一位置优先使用较长词组，例如“重新说一次”不能只按“重新说”截取。
+    occurrences.sort((a, b) => a.index - b.index || b.end - a.end);
 
-    const firstCorrection = occurrences.find(({ index }) => {
+    const firstCorrection = occurrences.find(({ marker, index }) => {
       const priorAnswer = stripFillers(text.slice(0, index));
-      return priorAnswer.length === expectedLength && !NON_ANSWER_PREFIXES.has(priorAnswer);
+      if (priorAnswer.length !== expectedLength) return false;
+      if (!NON_ANSWER_PREFIXES.has(priorAnswer)) return true;
+
+      // “可能、也许”等既可能是语气前缀，也可能是用户第一次读出的词。
+      // 明确改口词可直接消除歧义；软改口词需要“哦、嗯”等停顿边界。
+      const hasFillerBoundary = index > 0 && FILLER_CHARS.has(text[index - 1]);
+      return hasFillerBoundary || EXPLICIT_CORRECTION_MARKERS.has(marker);
     });
     if (!firstCorrection) return { tail: "", displayTail: "", hasExplicit: false };
 
@@ -195,8 +241,27 @@
     const extra = (root && root.SPEECH_TEST_EXTRA_TONES) || {};
     if (extra[text]) return extra[text];
     if (PHRASE_TONES[text]) return PHRASE_TONES[text];
+    const automaticTone = getAutomaticToneKey(text);
+    if (automaticTone) return automaticTone;
     const parts = Array.from(text).map((char) => charToneMap[char]);
     return parts.every(Boolean) ? parts.join("_") : "";
+  }
+
+  function getAutomaticToneKey(text) {
+    const converter = root && root.pinyinPro && root.pinyinPro.pinyin;
+    if (typeof converter !== "function") return "";
+    try {
+      const parts = converter(text, {
+        toneType: "num",
+        type: "array",
+        v: true,
+        toneSandhi: true,
+        nonZh: "removed"
+      });
+      return Array.isArray(parts) && parts.length === Array.from(text).length ? parts.join("_") : "";
+    } catch {
+      return "";
+    }
   }
 
   function buildCharToneMap(phraseMap) {

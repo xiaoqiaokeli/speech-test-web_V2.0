@@ -53,9 +53,9 @@
         <button class="resume-button is-hidden" id="resumeAudioButton" type="button">点击继续播放</button>
         <button class="record-button is-hidden" id="recordButton" type="button">点击开始录音</button>
         <button class="record-button is-hidden" id="retryButton" type="button">重试</button>
-        <button class="skip-button is-hidden" id="skipButton" type="button" aria-label="不会，跳过此题；此题将计为错误">
+        <button class="skip-button is-hidden" id="skipButton" type="button" aria-label="不会，跳过此题；若跳过此题将计为错误">
           <span class="skip-button-label">不会，跳过此题</span>
-          <span class="skip-button-note">此题将计为错误</span>
+          <span class="skip-button-note">若跳过此题将计为错误</span>
         </button>
       </section>
 
@@ -98,7 +98,8 @@
 
     <script src="./words-data.js?v=20260715-rms-levels"></script>
     <script src="./audio-calibration.js?v=20260715-window-rms"></script>
-    <script src="./pronunciation-judge.js?v=20260716-correction-tail"></script>
-    <script src="./app.js?v=20260716-skip-clarity"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.28.1/dist/index.js"></script>
+    <script src="./pronunciation-judge.js?v=20260716-final-candidate"></script>
+    <script src="./app.js?v=20260716-recording-only-skip"></script>
   </body>
 </html>

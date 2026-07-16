@@ -14,7 +14,7 @@ test("跳过按钮明确说明该题会计为错误", () => {
   assert.match(html, /此题将计为错误/);
 });
 
-test("跳过按钮在播放结束并进入录音后才显示", () => {
+test("跳过按钮只在录音真正开始后显示", () => {
   const playStart = appScript.indexOf("async function playCurrentWord");
   const playEnd = appScript.indexOf("function showPlaybackBlocked");
   const recognitionStart = appScript.indexOf("async function beginXfyunRecognition");
@@ -24,4 +24,11 @@ test("跳过按钮在播放结束并进入录音后才显示", () => {
 
   assert.doesNotMatch(playbackCode, /skipButton\.classList\.remove/);
   assert.match(recognitionCode, /recordPcm\(RECORD_MAX_MS, \(\) => elements\.skipButton\.classList\.remove\("is-hidden"\)\)/);
+  assert.match(recognitionCode, /skipButton\.classList\.add\("is-hidden"\);\s*setPhase\("recognizing"\)/);
+  assert.doesNotMatch(appScript.slice(appScript.indexOf("function showManualRecordStart"), recognitionStart), /skipButton\.classList\.remove/);
+});
+
+test("跳过题会记录独立的错误原因", () => {
+  assert.match(appScript, /heard: "已跳过", correct: false, reason: "已跳过"/);
+  assert.match(appScript, /判错原因：\$\{answer\.reason/);
 });
