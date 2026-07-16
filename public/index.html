@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>言语测试</title>
-    <link rel="stylesheet" href="./styles.css?v=20260716-skip-clarity" />
+    <link rel="stylesheet" href="./styles.css?v=20260716-readable-text" />
   </head>
   <body>
     <main id="app" class="app-shell" aria-live="polite">
@@ -25,7 +25,7 @@
         </div>
 
         <div class="status-orb" id="statusOrb" aria-hidden="true">
-          <span id="statusIcon">▶</span>
+          <span id="statusIcon"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M9 25h12l15-12v38L21 39H9Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M43 23c5 5 5 13 0 18M49 17c9 9 9 21 0 30" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span>
         </div>
 
         <p class="phase-text" id="phaseText">请点击开始按钮</p>
@@ -100,6 +100,6 @@
     <script src="./audio-calibration.js?v=20260715-window-rms"></script>
     <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.28.1/dist/index.js"></script>
     <script src="./pronunciation-judge.js?v=20260716-variable-correction"></script>
-    <script src="./app.js?v=20260716-recording-only-skip"></script>
+    <script src="./app.js?v=20260716-svg-status-icons"></script>
   </body>
 </html>

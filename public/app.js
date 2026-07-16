@@ -33,12 +33,12 @@
   const pronunciationJudge = window.SpeechTestPronunciation;
 
   const ICONS = {
-    play: "▶",
+    play: '<svg viewBox="0 0 64 64" role="img" aria-label="正在播放声音"><path d="M9 25h12l15-12v38L21 39H9Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M43 23c5 5 5 13 0 18M49 17c9 9 9 21 0 30" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg>',
     mic: '<svg viewBox="0 0 64 64" role="img" aria-label="麦克风"><path d="M32 38c6.1 0 11-4.9 11-11V16c0-6.1-4.9-11-11-11S21 9.9 21 16v11c0 6.1 4.9 11 11 11Z" fill="none" stroke="currentColor" stroke-width="5"/><path d="M14 27c0 10 8 18 18 18s18-8 18-18M32 45v12M22 57h20" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg>',
     search: '<svg viewBox="0 0 64 64" role="img" aria-label="正在识别"><circle cx="27" cy="27" r="17" fill="none" stroke="currentColor" stroke-width="5"/><path d="M40 40l14 14" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="M20 27h14M27 20v14" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>',
-    correct: "✓",
-    wrong: "×",
-    alert: "!"
+    correct: '<svg viewBox="0 0 64 64" role="img" aria-label="回答正确"><path d="M12 33l13 13 28-30" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    wrong: '<svg viewBox="0 0 64 64" role="img" aria-label="回答错误"><path d="M17 17l30 30M47 17L17 47" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></svg>',
+    alert: '<svg viewBox="0 0 64 64" role="img" aria-label="需要注意"><path d="M32 7 58 55H6Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M32 23v15M32 47h.01" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></svg>'
   };
 
   const elements = {
