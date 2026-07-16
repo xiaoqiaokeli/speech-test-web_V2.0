@@ -277,7 +277,6 @@
     hideFlash();
     hideAnswer();
     hideActionButtons();
-    elements.skipButton.classList.remove("is-hidden");
     const audio = getAudioElement();
     const noiseTrack = getNoiseTrackForQuestion(currentIndex);
     const noiseAudio = getNoiseAudioElement(noiseTrack);
@@ -345,6 +344,7 @@
     setPhase("recording-ready");
     elements.hintText.textContent = message || "浏览器限制了自动录音，请点一下开始录音。";
     elements.recordButton.classList.remove("is-hidden");
+    elements.skipButton.classList.remove("is-hidden");
   }
 
   async function beginXfyunRecognition(options = {}) {
@@ -354,6 +354,7 @@
     recordingInProgress = true;
     const manual = options.manual === true;
     elements.recordButton.classList.add("is-hidden");
+    elements.skipButton.classList.add("is-hidden");
     let signed;
     try {
       const response = await fetch("/api/xfyun-token", { cache: "no-store" });
@@ -371,7 +372,7 @@
 
     try {
       setPhase("recording");
-      const pcm = await recordPcm(RECORD_MAX_MS);
+      const pcm = await recordPcm(RECORD_MAX_MS, () => elements.skipButton.classList.remove("is-hidden"));
       if (run !== recognitionRun) return;
       setPhase("recognizing");
       const text = await recognizeWithXfyun(signed, pcm);
@@ -398,7 +399,7 @@
     }
   }
 
-  async function recordPcm(durationMs) {
+  async function recordPcm(durationMs, onReady) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("当前浏览器无法调用麦克风");
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: { ideal: 1 }, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -508,6 +509,7 @@
         processor.connect(mute);
         mute.connect(audioContext.destination);
         maxTimer = window.setTimeout(finish, durationMs);
+        if (typeof onReady === "function") onReady();
       } catch (error) {
         cleanup();
         reject(error);

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>言语测试</title>
-    <link rel="stylesheet" href="./styles.css?v=20260715-skip-silence" />
+    <link rel="stylesheet" href="./styles.css?v=20260716-skip-clarity" />
   </head>
   <body>
     <main id="app" class="app-shell" aria-live="polite">
@@ -53,7 +53,10 @@
         <button class="resume-button is-hidden" id="resumeAudioButton" type="button">点击继续播放</button>
         <button class="record-button is-hidden" id="recordButton" type="button">点击开始录音</button>
         <button class="record-button is-hidden" id="retryButton" type="button">重试</button>
-        <button class="skip-button is-hidden" id="skipButton" type="button" aria-label="跳过当前题">&gt;&gt; 跳过</button>
+        <button class="skip-button is-hidden" id="skipButton" type="button" aria-label="不会，跳过此题；此题将计为错误">
+          <span class="skip-button-label">不会，跳过此题</span>
+          <span class="skip-button-note">此题将计为错误</span>
+        </button>
       </section>
 
       <section class="result-panel is-hidden" id="resultPanel">
@@ -95,7 +98,7 @@
 
     <script src="./words-data.js?v=20260715-rms-levels"></script>
     <script src="./audio-calibration.js?v=20260715-window-rms"></script>
-    <script src="./pronunciation-judge.js?v=20260715-judge-lab"></script>
-    <script src="./app.js?v=20260715-skip-silence"></script>
+    <script src="./pronunciation-judge.js?v=20260716-correction-tail"></script>
+    <script src="./app.js?v=20260716-skip-clarity"></script>
   </body>
 </html>

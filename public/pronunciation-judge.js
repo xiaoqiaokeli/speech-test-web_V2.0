@@ -42,7 +42,7 @@
     const base = normalizeStandaloneConfirmation(stripFillers(cleanActual), cleanExpected);
     const correction = getCorrectionParts(cleanActual, cleanExpected.length);
     const rawTail = stripFillers(correction.tail);
-    const tail = normalizeExplicitCorrectionTail(rawTail, cleanExpected, correction.hasExplicit);
+    const tail = normalizeCorrectionTail(rawTail, cleanExpected, correction.hasExplicit);
 
     // 依次尝试：改口后的内容（优先）、去语气词后的整体
     let matchedCandidate = "";
@@ -57,7 +57,7 @@
 
     // 判对时只显示命中的答案；明确改口后仍判错时，显示改口词之后的完整内容。
     // 只有“应该是”等软标记而没有明确改口词时，仍显示完整识别原话。
-    const correctionDisplay = stripFillers(correction.displayTail);
+    const correctionDisplay = normalizeCorrectionDisplay(correction.displayTail, cleanExpected, correction.hasExplicit);
     const displaySource = matchedCandidate || correctionDisplay || cleanActual;
     const display = collapseRepeats(displaySource, cleanExpected.length) || displaySource || rawText || "未识别到声音";
     return { correct: Boolean(matchedCandidate), display };
@@ -96,14 +96,15 @@
     return text;
   }
 
-  function normalizeExplicitCorrectionTail(text, cleanExpected, hasExplicit) {
-    if (!hasExplicit) return text;
+  function normalizeCorrectionTail(text, cleanExpected, hasExplicit) {
     const variants = [text];
-    if (text.startsWith("是")) variants.push(stripFillers(text.slice(1)));
+    if (hasExplicit && text.startsWith("是")) variants.push(stripFillers(text.slice(1)));
 
     for (const variant of variants) {
-      if (isBasicMatch(cleanExpected, variant) || isRepeatedMatch(cleanExpected, variant)) return variant;
-      if (isFillerSeparatedRepeatedMatch(cleanExpected, variant)) return cleanExpected;
+      if (hasExplicit) {
+        if (isBasicMatch(cleanExpected, variant) || isRepeatedMatch(cleanExpected, variant)) return variant;
+        if (isFillerSeparatedRepeatedMatch(cleanExpected, variant)) return cleanExpected;
+      }
 
       if (variant.endsWith("才对")) {
         const confirmed = stripFillers(variant.slice(0, -2));
@@ -112,6 +113,12 @@
       }
     }
     return text;
+  }
+
+  function normalizeCorrectionDisplay(text, cleanExpected, hasExplicit) {
+    const display = stripFillers(text);
+    if (!hasExplicit || !display.startsWith("是") || cleanExpected.startsWith("是")) return display;
+    return stripFillers(display.slice(1));
   }
 
   function isFillerSeparatedRepeatedMatch(cleanExpected, text) {
