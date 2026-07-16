@@ -28,7 +28,8 @@ test("跳过按钮只在录音真正开始后显示", () => {
   assert.doesNotMatch(appScript.slice(appScript.indexOf("function showManualRecordStart"), recognitionStart), /skipButton\.classList\.remove/);
 });
 
-test("跳过题会记录独立的错误原因", () => {
-  assert.match(appScript, /heard: "已跳过", correct: false, reason: "已跳过"/);
-  assert.match(appScript, /判错原因：\$\{answer\.reason/);
+test("结果页面不显示判错原因", () => {
+  assert.match(appScript, /heard: "已跳过", correct: false/);
+  assert.doesNotMatch(appScript, /判错原因/);
+  assert.doesNotMatch(appScript, /reason\.className = "reason"/);
 });

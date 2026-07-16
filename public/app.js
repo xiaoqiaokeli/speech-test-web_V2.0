@@ -643,8 +643,8 @@
     finalizing = true;
     elements.skipButton.classList.add("is-hidden");
     const item = testItems[currentIndex];
-    const { correct, display, reason } = pronunciationJudge.judgePronunciation(item.word, rawHeard);
-    answers.push({ item, heard: display, correct, reason, order: currentIndex + 1 });
+    const { correct, display } = pronunciationJudge.judgePronunciation(item.word, rawHeard);
+    answers.push({ item, heard: display, correct, order: currentIndex + 1 });
     showJudgement(correct, item, display);
     startCountdown(currentIndex >= testItems.length - 1);
   }
@@ -682,7 +682,7 @@
     clearTimeout(countdownTimer);
     hideActionButtons();
     const item = testItems[currentIndex];
-    answers.push({ item, heard: "已跳过", correct: false, reason: "已跳过", order: currentIndex + 1 });
+    answers.push({ item, heard: "已跳过", correct: false, order: currentIndex + 1 });
     currentIndex += 1;
     if (currentIndex >= testItems.length) showResults();
     else playCurrentWord();
@@ -749,12 +749,6 @@
       expected.textContent = answer.item.word;
       heard.textContent = answer.heard || "未识别";
       li.append(seq, expected, heard);
-      if (!answer.correct) {
-        const reason = document.createElement("span");
-        reason.className = "reason";
-        reason.textContent = `判错原因：${answer.reason || "答案与正确答案不一致"}`;
-        li.appendChild(reason);
-      }
       elements.resultList.appendChild(li);
     });
     elements.testPanel.classList.add("is-hidden");
