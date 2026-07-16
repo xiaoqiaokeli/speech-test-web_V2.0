@@ -188,7 +188,10 @@
           return response.arrayBuffer();
         })
         .then((arrayBuffer) => getNoiseDecodeContext().decodeAudioData(arrayBuffer))
-        .then((buffer) => audioCalibration.limitNoiseBuffer(buffer, 8))
+        // 注意：不要在这里对 buffer 做 limitNoiseBuffer 等修改。此 buffer 只用于
+        // RMS 测量，实际播放的是原始 mp3 文件（<audio> 元素）——测量与播放必须
+        // 一致，否则校准出的音量是错的。噪声的动态控制已由 tools/process-noise.cjs
+        // 离线完成（短时波动 ≤5dB、波峰因子 ≤8dB）。
         .catch((error) => {
           noiseBufferPromises.delete(track.src);
           throw error;

@@ -9,3 +9,6 @@ public/judge-test.html
 public/judge-test.css
 public/judge-test.js
 tests/judge-test-page.test.cjs
+
+# Local noise processing tools (analysis scripts + original noise backup)
+tools/
