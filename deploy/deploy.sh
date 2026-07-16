@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SERVER="root@106.75.246.233"
-REMOTE_DIR="/var/www/speech-test"
+REMOTE_DIR="/var/www/speech-test-v2"
 LOCAL_DIR="$(cd "$(dirname "$0")/.." && pwd)/public"
 
 echo "==> 同步 $LOCAL_DIR -> $SERVER:$REMOTE_DIR"
@@ -18,6 +18,6 @@ else
     | ssh "$SERVER" "tar xzf - -C $REMOTE_DIR && chown -R nginx:nginx $REMOTE_DIR"
 fi
 
-echo "==> 完成。https://hearing.hnboy2005.info/"
+echo "==> 完成。https://speech.hnboy2005.info/"
 echo "    如更新了 deploy/xfyun-token-server.py，请另行执行:"
 echo "    scp deploy/xfyun-token-server.py $SERVER:/opt/speech-test/ && ssh $SERVER 'systemctl restart speech-test-token'"
