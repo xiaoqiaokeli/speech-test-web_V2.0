@@ -93,5 +93,67 @@
     };
   }
 
-  return { calculateLoopingWindowRms, calculateSnrVolumes, createNoiseCycle, normalizeCursor };
+  function limitNoiseBuffer(audioBuffer, targetCrestDb) {
+    const crestDb = Number.isFinite(targetCrestDb) ? targetCrestDb : 8;
+    const channelCount = audioBuffer && audioBuffer.numberOfChannels;
+    const frameCount = audioBuffer && audioBuffer.length;
+    const sampleRate = audioBuffer && audioBuffer.sampleRate;
+    if (!Number.isInteger(channelCount) || channelCount <= 0 || !Number.isInteger(frameCount) || frameCount <= 0) {
+      throw new Error("无效的音频缓冲区");
+    }
+
+    // 测初始 RMS 和峰值
+    function measure() {
+      let sumSquares = 0, sampleCount = 0, peak = 0;
+      for (let ch = 0; ch < channelCount; ch++) {
+        const data = audioBuffer.getChannelData(ch);
+        for (let i = 0; i < data.length; i++) {
+          sumSquares += data[i] * data[i];
+          sampleCount++;
+          peak = Math.max(peak, Math.abs(data[i]));
+        }
+      }
+      return { rms: Math.sqrt(sumSquares / sampleCount), peak };
+    }
+
+    const initial = measure();
+    const currentCrestDb = 20 * Math.log10(initial.peak / initial.rms);
+
+    // 如果当前波峰因子已经 <= 目标，不处理
+    if (currentCrestDb <= crestDb + 0.5) {
+      return audioBuffer;
+    }
+
+    // 迭代式限幅：每次根据当前 RMS 计算目标峰值，限幅，重测，直到收敛
+    const maxIterations = 10;
+    for (let iter = 0; iter < maxIterations; iter++) {
+      const current = measure();
+      const targetPeak = current.rms * Math.pow(10, crestDb / 20);
+
+      // 限幅到 targetPeak
+      let clipped = false;
+      for (let ch = 0; ch < channelCount; ch++) {
+        const data = audioBuffer.getChannelData(ch);
+        for (let i = 0; i < data.length; i++) {
+          const absVal = Math.abs(data[i]);
+          if (absVal > targetPeak) {
+            data[i] = (data[i] >= 0 ? targetPeak : -targetPeak);
+            clipped = true;
+          }
+        }
+      }
+
+      // 如果这轮没有削波，说明已收敛
+      if (!clipped) break;
+
+      // 检查波峰因子是否达标
+      const after = measure();
+      const afterCrestDb = 20 * Math.log10(after.peak / after.rms);
+      if (Math.abs(afterCrestDb - crestDb) < 0.3) break;
+    }
+
+    return audioBuffer;
+  }
+
+  return { calculateLoopingWindowRms, calculateSnrVolumes, createNoiseCycle, normalizeCursor, limitNoiseBuffer };
 });

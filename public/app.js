@@ -188,6 +188,7 @@
           return response.arrayBuffer();
         })
         .then((arrayBuffer) => getNoiseDecodeContext().decodeAudioData(arrayBuffer))
+        .then((buffer) => audioCalibration.limitNoiseBuffer(buffer, 8))
         .catch((error) => {
           noiseBufferPromises.delete(track.src);
           throw error;
